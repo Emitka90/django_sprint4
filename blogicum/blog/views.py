@@ -117,9 +117,9 @@ class PostDetailView(PostMixin, DetailView):
         instance = get_object_or_404(Post, pk=kwargs['post_id'])
         # Сверяем автора объекта и пользователя из запроса.
         if instance.author != request.user and (
-            instance.pub_date > timezone.now() or
-            instance.is_published is False or
-            instance.category.is_published is False
+            instance.pub_date > timezone.now()
+            or instance.is_published is False
+            or instance.category.is_published is False
         ):
             raise Http404
         return super().dispatch(request, *args, **kwargs)
@@ -129,7 +129,7 @@ class PostDetailView(PostMixin, DetailView):
         context['form'] = CommentForm()
         context['comments'] = Comment.objects.filter(
             post_id=self.kwargs['post_id']
-            )
+        )
         return context
 
 
