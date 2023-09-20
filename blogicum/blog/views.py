@@ -6,9 +6,18 @@ from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
 from django.utils import timezone
+from django.db.models import Q
 
 from .models import Post, Category, User, Comment
 from .forms import CommentForm, PostForm
+
+
+class PostDispatchMixin:
+    def dispatch(self, request, *args, **kwargs):
+        instance = get_object_or_404(Post, pk=kwargs['post_id'])
+        if instance.author != request.user:
+            return redirect('blog:post_detail', kwargs['post_id'])
+        return super().dispatch(request, *args, **kwargs)
 
 
 class PostPaginateMixin:
@@ -114,14 +123,19 @@ class PostDetailView(PostMixin, DetailView):
     template_name = 'blog/detail.html'
 
     def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        # Сверяем автора объекта и пользователя из запроса.
-        if instance.author != request.user and (
-            instance.pub_date > timezone.now()
-            or instance.is_published is False
-            or instance.category.is_published is False
-        ):
-            raise Http404
+        if request.user.is_authenticated:
+            get_object_or_404(Post.objects.filter(
+                Q(Q(Q(pub_date__lte=timezone.now())
+                    & Q(is_published=True)
+                    & Q(category__is_published=True))
+                    & ~Q(author=request.user))
+                | Q(author=request.user)
+                ), pk=kwargs['post_id'])
+        else:
+            get_object_or_404(Post.objects.filter(
+                Q(pub_date__lte=timezone.now())
+                & Q(is_published=True)
+                & Q(category__is_published=True)), pk=kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -133,28 +147,20 @@ class PostDetailView(PostMixin, DetailView):
         return context
 
 
-class PostUpdateView(LoginRequiredMixin, PostMixin, UpdateView):
+class PostUpdateView(
+    LoginRequiredMixin, PostMixin, PostDispatchMixin, UpdateView
+):
     ''' Редактирование публикации '''
     form_class = PostForm
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        if instance.author != request.user:
-            return redirect('blog:post_detail', kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse('blog:post_detail', kwargs={'post_id': self.object.pk})
 
 
-class PostDeleteView(LoginRequiredMixin, PostMixin, DeleteView):
+class PostDeleteView(
+    LoginRequiredMixin, PostMixin, PostDispatchMixin, DeleteView
+):
     ''' Удаление публикации '''
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        if instance.author != request.user:
-            raise Http404
-        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse('blog:profile', kwargs={'username': self.request.user})
@@ -162,18 +168,14 @@ class PostDeleteView(LoginRequiredMixin, PostMixin, DeleteView):
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
     ''' Добавление комментария '''
-    blog = None
+
     model = Comment
     form_class = CommentForm
-    template_name = 'blog/comment.html'
-
-    def dispatch(self, request, *args, **kwargs):
-        self.blog = get_object_or_404(Post, pk=kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
+    template_name = 'includes/comments.html'
 
     def form_valid(self, form):
         form.instance.author = self.request.user
-        form.instance.post = self.blog
+        form.instance.post = get_object_or_404(Post, pk=self.kwargs['post_id'])
         return super().form_valid(form)
 
 

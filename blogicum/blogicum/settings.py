@@ -28,6 +28,8 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
+    'www.eminmmdv.pythonanywhere.com',
+    'eminmmdv.pythonanywhere.com',
 ]
 
 # Application definition
