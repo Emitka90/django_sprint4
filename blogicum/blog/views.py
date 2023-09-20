@@ -130,12 +130,13 @@ class PostDetailView(PostMixin, DetailView):
                     & Q(category__is_published=True))
                     & ~Q(author=request.user))
                 | Q(author=request.user)
-                ), pk=kwargs['post_id'])
+            ), pk=kwargs['post_id'])
         else:
             get_object_or_404(Post.objects.filter(
                 Q(pub_date__lte=timezone.now())
                 & Q(is_published=True)
-                & Q(category__is_published=True)), pk=kwargs['post_id'])
+                & Q(category__is_published=True)
+            ), pk=kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
