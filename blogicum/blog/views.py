@@ -123,20 +123,11 @@ class PostDetailView(PostMixin, DetailView):
     template_name = 'blog/detail.html'
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            get_object_or_404(Post.objects.filter(
-                Q(Q(Q(pub_date__lte=timezone.now())
-                    & Q(is_published=True)
-                    & Q(category__is_published=True))
-                    & ~Q(author=request.user))
-                | Q(author=request.user)
-            ), pk=kwargs['post_id'])
-        else:
-            get_object_or_404(Post.objects.filter(
-                Q(pub_date__lte=timezone.now())
-                & Q(is_published=True)
-                & Q(category__is_published=True)
-            ), pk=kwargs['post_id'])
+        get_object_or_404(Post.objects.filter(
+            Q(pub_date__lte=timezone.now(),
+              is_published=True,
+              category__is_published=True)
+            | Q(author__username=request.user.username)), pk=kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -185,13 +176,12 @@ class CommentUpdateView(LoginRequiredMixin, CommentMixin, UpdateView):
     form_class = CommentForm
 
     def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(
+        get_object_or_404(
             Comment,
             pk=self.kwargs['comment_id'],
             post_id=self.kwargs['post_id'],
+            author__username=request.user.username
         )
-        if instance.author != request.user:
-            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -199,13 +189,12 @@ class CommentDeleteView(LoginRequiredMixin, CommentMixin, DeleteView):
     ''' Удаление комментария '''
 
     def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(
+        get_object_or_404(
             Comment,
             pk=self.kwargs['comment_id'],
             post_id=self.kwargs['post_id'],
+            author__username=request.user.username
         )
-        if instance.author != request.user:
-            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
