@@ -4,7 +4,6 @@ from django.views.generic import (
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import Http404
 from django.utils import timezone
 from django.db.models import Q
 
