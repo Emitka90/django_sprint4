@@ -46,4 +46,4 @@ class PostsMixin:
             pub_date__lte=timezone.now()
         ).annotate(
             comment_count=Count('comments')
-            ).order_by('-pub_date')
+        ).order_by('-pub_date')
