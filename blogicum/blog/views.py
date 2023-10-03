@@ -1,62 +1,28 @@
-from django.views.generic import (
-    ListView, CreateView, UpdateView, DeleteView, DetailView
-)
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Q
+from django.views.generic import (CreateView, DeleteView, DetailView, ListView,
+                                  UpdateView)
 
-from .models import Post, Category, User, Comment
-from .forms import CommentForm, PostForm
-
-
-class PostDispatchMixin:
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
-        if instance.author != request.user:
-            return redirect('blog:post_detail', kwargs['post_id'])
-        return super().dispatch(request, *args, **kwargs)
+from blog.forms import CommentForm, PostForm
+from blog.mixin import CommentMixin, PostDispatchMixin, PostMixin, PostsMixin
+from blog.models import Category, Comment, Post, User
 
 
-class PostPaginateMixin:
-    model = Post
-    paginate_by = 10
-
-
-class PostMixin:
-    model = Post
-    pk_url_kwarg = 'post_id'
-    template_name = 'blog/create.html'
-
-
-class CommentMixin:
-    model = Comment
-    pk_url_kwarg = 'comment_id'
-    template_name = 'blog/comment.html'
-
-
-class IndexListView(PostPaginateMixin, ListView):
+class IndexListView(PostsMixin, ListView):
+    ''' Главная страница '''
     template_name = 'blog/index.html'
 
-    def get_queryset(self):
-        return Post.objects.filter(
-            is_published=True,
-            category__is_published=True,
-            pub_date__lte=timezone.now()
-        )
 
-
-class CategoryListView(PostPaginateMixin, ListView):
+class CategoryListView(PostsMixin, ListView):
     ''' Список постов по категориям '''
     template_name = 'blog/category.html'
 
     def get_queryset(self):
-        return Post.objects.filter(
-            category__slug=self.kwargs['category_slug'],
-            is_published=True,
-            category__is_published=True,
-            pub_date__lte=timezone.now()
+        return super().get_queryset().filter(
+            category__slug=self.kwargs['category_slug']
         )
 
     def get_context_data(self, **kwargs):
@@ -69,23 +35,21 @@ class CategoryListView(PostPaginateMixin, ListView):
         return context
 
 
-class ProfileListView(PostPaginateMixin, ListView):
+class ProfileListView(PostsMixin, ListView):
     ''' Страница профиля '''
     template_name = 'blog/profile.html'
 
     def get_queryset(self):
-        # Проверяет кто просматривает страницу пользователя.
-        # Если зашел сам автор, то выводятся все публикации, опубликованные им.
+        ''' Проверяет кто просматривает страницу пользователя. '''
         if self.request.user.username == self.kwargs['username']:
             return Post.objects.filter(
                 author__username=self.kwargs['username'],
-            )
+            ).annotate(
+                comment_count=Count('comments')
+            ).order_by('-pub_date')
         else:
-            return Post.objects.filter(
-                author__username=self.kwargs['username'],
-                is_published=True,
-                category__is_published=True,
-                pub_date__lte=timezone.now()
+            return super().get_queryset().filter(
+                author__username=self.kwargs['username']
             )
 
     def get_context_data(self, **kwargs):
@@ -100,9 +64,10 @@ class ProfileUpdateView(LoginRequiredMixin, UpdateView):
     ''' Редактирование профиля '''
     model = User
     template_name = 'blog/user.html'
-    slug_field = 'username'
-    slug_url_kwarg = 'username'
     fields = ('username', 'last_name', 'first_name', 'email')
+
+    def get_object(self, queryset=None):
+        return self.request.user
 
     def get_success_url(self):
         return reverse('blog:profile', kwargs={'username': self.request.user})
@@ -132,9 +97,7 @@ class PostDetailView(PostMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
-        context['comments'] = Comment.objects.filter(
-            post_id=self.kwargs['post_id']
-        )
+        context['comments'] = self.get_object().comments.all()
         return context
 
 
@@ -159,10 +122,9 @@ class PostDeleteView(
 
 class CommentCreateView(LoginRequiredMixin, CreateView):
     ''' Добавление комментария '''
-
     model = Comment
     form_class = CommentForm
-    template_name = 'includes/comments.html'
+    template_name = 'blog/create.html'
 
     def form_valid(self, form):
         form.instance.author = self.request.user
@@ -174,27 +136,9 @@ class CommentUpdateView(LoginRequiredMixin, CommentMixin, UpdateView):
     ''' Редактирование комментария '''
     form_class = CommentForm
 
-    def dispatch(self, request, *args, **kwargs):
-        get_object_or_404(
-            Comment,
-            pk=self.kwargs['comment_id'],
-            post_id=self.kwargs['post_id'],
-            author__username=request.user.username
-        )
-        return super().dispatch(request, *args, **kwargs)
-
 
 class CommentDeleteView(LoginRequiredMixin, CommentMixin, DeleteView):
     ''' Удаление комментария '''
-
-    def dispatch(self, request, *args, **kwargs):
-        get_object_or_404(
-            Comment,
-            pk=self.kwargs['comment_id'],
-            post_id=self.kwargs['post_id'],
-            author__username=request.user.username
-        )
-        return super().dispatch(request, *args, **kwargs)
 
     def get_success_url(self):
         return reverse(

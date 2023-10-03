@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Location, Post, Comment
+from blog.models import Category, Comment, Location, Post
 
 
 class PostInline(admin.StackedInline):
@@ -8,6 +8,7 @@ class PostInline(admin.StackedInline):
     extra = 0
 
 
+@admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     inlines = (
         PostInline,
@@ -29,6 +30,7 @@ class CategoryAdmin(admin.ModelAdmin):
     list_per_page = 10
 
 
+@admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     inlines = (
         PostInline,
@@ -46,6 +48,7 @@ class LocationAdmin(admin.ModelAdmin):
     list_display_links = ('name',)
 
 
+@admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     list_display = (
         'title',
@@ -70,6 +73,7 @@ class PostAdmin(admin.ModelAdmin):
     list_per_page = 10
 
 
+@admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = (
         'text',
@@ -86,8 +90,4 @@ class CommentAdmin(admin.ModelAdmin):
     list_per_page = 10
 
 
-admin.site.register(Category, CategoryAdmin)
-admin.site.register(Location, LocationAdmin)
-admin.site.register(Post, PostAdmin)
-admin.site.register(Comment, CommentAdmin)
 admin.site.empty_value_display = 'Не задано'
